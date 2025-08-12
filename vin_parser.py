@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 import re
 import time
 import json
+import argparse
 from datetime import datetime
 from dataclasses import dataclass, asdict
 
@@ -56,6 +57,36 @@ def validate_required_keys(data: Dict, required_keys: List[str], func_name: str)
     if missing:
         missing_keys = ", ".join(missing)
         raise ValueError(f"Missing required keys for {func_name}: {missing_keys}")
+
+
+def load_vins(path: str) -> List[str]:
+    """Load a list of VIN codes from a JSON file.
+
+    The JSON file should either contain a list of VIN strings or a dictionary
+    with a ``vins`` key holding the list.
+
+    Args:
+        path: Path to the JSON file.
+
+    Returns:
+        List of VIN codes.
+
+    Raises:
+        ValueError: If the JSON structure does not contain a VIN list.
+    """
+
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if isinstance(data, dict):
+        vin_list = data.get("vins")
+    else:
+        vin_list = data
+
+    if not isinstance(vin_list, list):
+        raise ValueError("VIN data must be a list or under the 'vins' key")
+
+    return vin_list
 
 # ==================== API ГИБДД ====================
 
@@ -1096,44 +1127,29 @@ def parse_multiple_vins(vin_list: List[str], api_key: str = None, output_format:
 # ==================== ГЛАВНАЯ ФУНКЦИЯ ====================
 
 def main():
-    """Интерактивный интерфейс для работы с VIN-парсером"""
-    
-    print("\n" + "="*70)
-    print("🚗 VIN-ПАРСЕР С ДАННЫМИ ГИБДД И ОТЗЫВАМИ")
-    print("="*70)
-    print("\nПарсер использует:")
-    print("  ✓ Официальные данные ГИБДД")
-    print("  ✓ Историю с Auto.ru")
-    print("  ✓ Отзывы с Drom.ru и Drive2.ru")
-    
-    # Пример использования
-    test_vin = "JMBXTGF2WDZ013380"
-    
-    print(f"\n📋 Демонстрация работы с VIN: {test_vin}")
-    
-    # Создаем парсер
+    """Parse VIN codes from a JSON file provided via command line."""
+
+    arg_parser = argparse.ArgumentParser(description="VIN parser")
+    arg_parser.add_argument("vin_file", help="Path to JSON file with VIN list")
+    args = arg_parser.parse_args()
+
+    vin_list = load_vins(args.vin_file)
     parser = VINParser()
-    
-    # Парсим VIN
-    result = parser.parse_by_vin(
-        vin=test_vin,
-        search_reviews=True,
-        get_additional=True,
-        max_reviews=20,
-        use_mock_data=True  # Используем тестовые данные для демонстрации
-    )
-    
-    # Экспортируем отчет
-    if not result.get("error"):
-        html_file = parser.export_report(result, format="html")
-        excel_file = parser.export_report(result, format="excel")
-        json_file = parser.export_report(result, format="json")
-        
-        print(f"\n📁 Отчеты сохранены:")
-        print(f"  • HTML: {html_file}")
-        print(f"  • Excel: {excel_file}")
-        print(f"  • JSON: {json_file}")
-    
+
+    total = len(vin_list)
+    for idx, vin in enumerate(vin_list, 1):
+        print(f"\n[{idx}/{total}] Обработка VIN: {vin}")
+        result = parser.parse_by_vin(
+            vin=vin,
+            search_reviews=True,
+            get_additional=True,
+            max_reviews=20,
+            use_mock_data=True,
+        )
+
+        if result.get("error"):
+            print(f"  ❌ Ошибка: {result['error']}")
+
     print("\n✅ Готово!")
 
 # ==================== ЗАПУСК ====================
