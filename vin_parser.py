@@ -212,66 +212,13 @@ def parse_gibdd_response(gibdd_data: Dict) -> VehicleInfo:
     reuse_driver=True,
     max_retry=3
 )
-def get_additional_info(driver: Driver, vin: str, brand: str, model: str) -> Dict:
 
-    """Получение дополнительной информации с auto.ru и других источников"""
+def get_additional_info(driver: Driver, data: Dict) -> Dict:
+    """Placeholder for fetching additional vehicle information.
 
-    additional_info = {}
-
-    try:
-        # Auto.ru - проверка на ДТП, пробег, количество владельцев
-        print("  📊 Проверяем историю на Auto.ru...")
-        auto_url = f"https://auto.ru/history/{vin}/"
-        driver.google_get(auto_url, bypass_cloudflare=True)
-        driver.sleep(2)
-        
-        # Ждем загрузки отчета
-        report_elem = driver.select('.VinReportPreview', wait=5)
-        if report_elem:
-            # ДТП
-            accidents_elem = driver.select('.VinReportPreview__accidentsCount')
-            if accidents_elem:
-                accidents_text = accidents_elem.get_text(strip=True)
-                additional_info['accidents'] = accidents_text
-            
-            # Пробег
-            mileage_elem = driver.select('.VinReportPreview__mileage')
-            if mileage_elem:
-                mileage_text = mileage_elem.get_text(strip=True)
-                additional_info['mileage'] = mileage_text
-            
-            # Количество владельцев
-            owners_elem = driver.select('.VinReportPreview__ownersCount')
-            if owners_elem:
-                owners_text = owners_elem.get_text(strip=True)
-                additional_info['owners_count'] = owners_text
-            
-            # Ограничения
-            restrictions_elem = driver.select('.VinReportPreview__restrictions')
-            if restrictions_elem:
-                restrictions_text = restrictions_elem.get_text(strip=True)
-                additional_info['restrictions'] = restrictions_text
-        
-        # Exist.ru - технические характеристики и запчасти
-        print("  🔧 Проверяем технические данные на Exist.ru...")
-        exist_url = f"https://exist.ru/Catalog/Cars/{brand}/{model}"
-        driver.get_via_this_page(exist_url)
-        driver.sleep(2)
-        
-        # Модификации и комплектации
-        modifications = []
-        mod_elements = driver.select_all('.car-modification-item')
-        for mod in mod_elements[:5]:  # Берем первые 5 модификаций
-            mod_text = mod.get_text(strip=True)
-            modifications.append(mod_text)
-        
-        if modifications:
-            additional_info['modifications'] = modifications
-        
-    except Exception as e:
-        print(f"    ⚠️ Ошибка при получении дополнительной информации: {e}")
-    
-    return additional_info
+    Currently no external sources are queried.
+    """
+    return {}
 
 # ==================== ПОИСК ОТЗЫВОВ ====================
 
@@ -523,10 +470,9 @@ class VINParser:
         return bool(vin_pattern.match(vin.upper()))
     
     def parse_by_vin(
-        self, 
-        vin: str, 
-        search_reviews: bool = True, 
-        get_additional: bool = True,
+        self,
+        vin: str,
+        search_reviews: bool = True,
         max_reviews: int = 20,
         use_mock_data: bool = False
     ) -> Dict:
@@ -536,7 +482,6 @@ class VINParser:
         Args:
             vin: VIN-код автомобиля
             search_reviews: Искать ли отзывы
-            get_additional: Получать ли дополнительную информацию
             max_reviews: Максимальное количество отзывов
             use_mock_data: Использовать тестовые данные (для демонстрации)
         """
@@ -638,31 +583,11 @@ class VINParser:
         else:
             print("  ✗ Не удалось получить данные из ГИБДД")
             return result
-        
-        # 2. Получение дополнительной информации
-        if get_additional and vehicle_info:
-            print("\n📈 Этап 2: Сбор дополнительной информации...")
 
-            validate_required_keys(
-                {"vin": vin, "brand": vehicle_info.brand, "model": vehicle_info.model},
-                ["vin", "brand", "model"],
-                "get_additional_info",
-            )
-            additional = get_additional_info(vin, vehicle_info.brand, vehicle_info.model)
+        # 2. Поиск отзывов
 
-            result["additional_info"] = additional
-            
-            if additional:
-                if 'accidents' in additional:
-                    print(f"    • ДТП: {additional['accidents']}")
-                if 'mileage' in additional:
-                    print(f"    • Пробег: {additional['mileage']}")
-                if 'restrictions' in additional:
-                    print(f"    • Ограничения: {additional['restrictions']}")
-        
-        # 3. Поиск отзывов
         if search_reviews and vehicle_info:
-            print("\n📝 Этап 3: Поиск отзывов владельцев...")
+            print("\n📝 Этап 2: Поиск отзывов владельцев...")
 
             reviews_data = {
                 "vehicle_info": vehicle_info,
@@ -687,7 +612,7 @@ class VINParser:
             if exact_matches:
                 print(f"    • С точным совпадением характеристик: {len(exact_matches)}")
         
-        # 4. Формирование итогового резюме
+        # 3. Формирование итогового резюме
         if vehicle_info:
             result["summary"] = {
                 "vin": vin,
@@ -1096,7 +1021,6 @@ def main():
     print("="*70)
     print("\nПарсер использует:")
     print("  ✓ Официальные данные ГИБДД")
-    print("  ✓ Историю с Auto.ru")
     print("  ✓ Отзывы с Drom.ru и Drive2.ru")
     
     # Пример использования
@@ -1111,7 +1035,6 @@ def main():
     result = parser.parse_by_vin(
         vin=test_vin,
         search_reviews=True,
-        get_additional=True,
         max_reviews=20,
         use_mock_data=True  # Используем тестовые данные для демонстрации
     )
