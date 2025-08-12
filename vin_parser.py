@@ -13,7 +13,7 @@ import re
 import time
 import json
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 # ==================== МОДЕЛЬ ДАННЫХ ====================
 
@@ -213,7 +213,10 @@ def parse_gibdd_response(gibdd_data: Dict) -> VehicleInfo:
     max_retry=3
 )
 def get_additional_info(driver: Driver, data: Dict) -> Dict:
-    """Получение дополнительной информации с auto.ru и других источников"""
+
+    """
+    Получение дополнительной информации с auto.ru и других источников
+    """
 
     vin = data["vin"]
     brand = data["brand"]
@@ -285,10 +288,12 @@ def get_additional_info(driver: Driver, data: Dict) -> Dict:
     max_retry=3
 )
 def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
+
     """Улучшенный поиск отзывов с учетом данных из ГИБДД"""
 
     vehicle_info: VehicleInfo = data["vehicle_info"]
     max_reviews: int = data.get("max_reviews", 20)
+
 
     reviews = []
 
@@ -643,6 +648,7 @@ class VINParser:
         # 2. Получение дополнительной информации
         if get_additional and vehicle_info:
             print("\n📈 Этап 2: Сбор дополнительной информации...")
+
             additional_data = {
                 "vin": vin,
                 "brand": vehicle_info.brand,
@@ -650,6 +656,7 @@ class VINParser:
             }
             validate_required_keys(additional_data, ["vin", "brand", "model"], "get_additional_info")
             additional = get_additional_info(additional_data)
+
             result["additional_info"] = additional
             
             if additional:
@@ -663,12 +670,14 @@ class VINParser:
         # 3. Поиск отзывов
         if search_reviews and vehicle_info:
             print("\n📝 Этап 3: Поиск отзывов владельцев...")
+
             reviews_data = {
                 "vehicle_info": vehicle_info,
                 "max_reviews": max_reviews,
             }
             validate_required_keys(reviews_data, ["vehicle_info"], "search_reviews_enhanced")
             reviews = search_reviews_enhanced(reviews_data)
+
             result["reviews"] = reviews
             
             # Статистика по отзывам
