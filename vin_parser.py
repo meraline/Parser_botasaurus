@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 import re
 import time
 import json
+import argparse
 from datetime import datetime
 from dataclasses import dataclass, asdict
 
@@ -56,6 +57,36 @@ def validate_required_keys(data: Dict, required_keys: List[str], func_name: str)
     if missing:
         missing_keys = ", ".join(missing)
         raise ValueError(f"Missing required keys for {func_name}: {missing_keys}")
+
+
+def load_vins(path: str) -> List[str]:
+    """Load a list of VIN codes from a JSON file.
+
+    The JSON file should either contain a list of VIN strings or a dictionary
+    with a ``vins`` key holding the list.
+
+    Args:
+        path: Path to the JSON file.
+
+    Returns:
+        List of VIN codes.
+
+    Raises:
+        ValueError: If the JSON structure does not contain a VIN list.
+    """
+
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if isinstance(data, dict):
+        vin_list = data.get("vins")
+    else:
+        vin_list = data
+
+    if not isinstance(vin_list, list):
+        raise ValueError("VIN data must be a list or under the 'vins' key")
+
+    return vin_list
 
 # ==================== API ГИБДД ====================
 
@@ -212,72 +243,13 @@ def parse_gibdd_response(gibdd_data: Dict) -> VehicleInfo:
     reuse_driver=True,
     max_retry=3
 )
+
 def get_additional_info(driver: Driver, data: Dict) -> Dict:
+    """Placeholder for fetching additional vehicle information.
 
+    Currently no external sources are queried.
     """
-    Получение дополнительной информации с auto.ru и других источников
-    """
-
-    vin = data["vin"]
-    brand = data["brand"]
-    model = data["model"]
-
-    additional_info = {}
-
-    try:
-        # Auto.ru - проверка на ДТП, пробег, количество владельцев
-        print("  📊 Проверяем историю на Auto.ru...")
-        auto_url = f"https://auto.ru/history/{vin}/"
-        driver.google_get(auto_url, bypass_cloudflare=True)
-        driver.sleep(2)
-        
-        # Ждем загрузки отчета
-        report_elem = driver.select('.VinReportPreview', wait=5)
-        if report_elem:
-            # ДТП
-            accidents_elem = driver.select('.VinReportPreview__accidentsCount')
-            if accidents_elem:
-                accidents_text = accidents_elem.get_text(strip=True)
-                additional_info['accidents'] = accidents_text
-            
-            # Пробег
-            mileage_elem = driver.select('.VinReportPreview__mileage')
-            if mileage_elem:
-                mileage_text = mileage_elem.get_text(strip=True)
-                additional_info['mileage'] = mileage_text
-            
-            # Количество владельцев
-            owners_elem = driver.select('.VinReportPreview__ownersCount')
-            if owners_elem:
-                owners_text = owners_elem.get_text(strip=True)
-                additional_info['owners_count'] = owners_text
-            
-            # Ограничения
-            restrictions_elem = driver.select('.VinReportPreview__restrictions')
-            if restrictions_elem:
-                restrictions_text = restrictions_elem.get_text(strip=True)
-                additional_info['restrictions'] = restrictions_text
-        
-        # Exist.ru - технические характеристики и запчасти
-        print("  🔧 Проверяем технические данные на Exist.ru...")
-        exist_url = f"https://exist.ru/Catalog/Cars/{brand}/{model}"
-        driver.get_via_this_page(exist_url)
-        driver.sleep(2)
-        
-        # Модификации и комплектации
-        modifications = []
-        mod_elements = driver.select_all('.car-modification-item')
-        for mod in mod_elements[:5]:  # Берем первые 5 модификаций
-            mod_text = mod.get_text(strip=True)
-            modifications.append(mod_text)
-        
-        if modifications:
-            additional_info['modifications'] = modifications
-        
-    except Exception as e:
-        print(f"    ⚠️ Ошибка при получении дополнительной информации: {e}")
-    
-    return additional_info
+    return {}
 
 # ==================== ПОИСК ОТЗЫВОВ ====================
 
@@ -678,6 +650,7 @@ class VINParser:
         vin: str,
         search_reviews: bool = True,
         get_additional: bool = True,
+
         max_reviews: int = 20,
         use_mock_data: bool = False,
         include_board_journals: bool = False
@@ -688,7 +661,6 @@ class VINParser:
         Args:
             vin: VIN-код автомобиля
             search_reviews: Искать ли отзывы
-            get_additional: Получать ли дополнительную информацию
             max_reviews: Максимальное количество отзывов
             use_mock_data: Использовать тестовые данные (для демонстрации)
             include_board_journals: Искать ли записи бортжурналов
@@ -791,18 +763,8 @@ class VINParser:
         else:
             print("  ✗ Не удалось получить данные из ГИБДД")
             return result
-        
-        # 2. Получение дополнительной информации
-        if get_additional and vehicle_info:
-            print("\n📈 Этап 2: Сбор дополнительной информации...")
 
-            additional_data = {
-                "vin": vin,
-                "brand": vehicle_info.brand,
-                "model": vehicle_info.model,
-            }
-            validate_required_keys(additional_data, ["vin", "brand", "model"], "get_additional_info")
-            additional = get_additional_info(additional_data)
+        # 2. Поиск отзывов
 
             result["additional_info"] = additional
             
@@ -815,8 +777,9 @@ class VINParser:
                     print(f"    • Ограничения: {additional['restrictions']}")
         
         # 3. Поиск отзывов и бортжурналов
+
         if search_reviews and vehicle_info:
-            print("\n📝 Этап 3: Поиск отзывов владельцев...")
+            print("\n📝 Этап 2: Поиск отзывов владельцев...")
 
             reviews_data = {
                 "vehicle_info": vehicle_info,
@@ -850,7 +813,7 @@ class VINParser:
             if exact_matches:
                 print(f"    • С точным совпадением характеристик: {len(exact_matches)}")
         
-        # 4. Формирование итогового резюме
+        # 3. Формирование итогового резюме
         if vehicle_info:
             result["summary"] = {
                 "vin": vin,
@@ -1252,44 +1215,31 @@ def parse_multiple_vins(vin_list: List[str], api_key: str = None, output_format:
 # ==================== ГЛАВНАЯ ФУНКЦИЯ ====================
 
 def main():
-    """Интерактивный интерфейс для работы с VIN-парсером"""
-    
-    print("\n" + "="*70)
-    print("🚗 VIN-ПАРСЕР С ДАННЫМИ ГИБДД И ОТЗЫВАМИ")
-    print("="*70)
-    print("\nПарсер использует:")
-    print("  ✓ Официальные данные ГИБДД")
-    print("  ✓ Историю с Auto.ru")
-    print("  ✓ Отзывы с Drom.ru и Drive2.ru")
-    
-    # Пример использования
-    test_vin = "JMBXTGF2WDZ013380"
-    
-    print(f"\n📋 Демонстрация работы с VIN: {test_vin}")
-    
-    # Создаем парсер
+
+    """Parse VIN codes from a JSON file provided via command line."""
+
+    arg_parser = argparse.ArgumentParser(description="VIN parser")
+    arg_parser.add_argument("vin_file", help="Path to JSON file with VIN list")
+    args = arg_parser.parse_args()
+
+    vin_list = load_vins(args.vin_file)
     parser = VINParser()
-    
-    # Парсим VIN
-    result = parser.parse_by_vin(
-        vin=test_vin,
-        search_reviews=True,
-        get_additional=True,
-        max_reviews=20,
-        use_mock_data=True  # Используем тестовые данные для демонстрации
-    )
-    
-    # Экспортируем отчет
-    if not result.get("error"):
-        html_file = parser.export_report(result, format="html")
-        excel_file = parser.export_report(result, format="excel")
-        json_file = parser.export_report(result, format="json")
-        
-        print(f"\n📁 Отчеты сохранены:")
-        print(f"  • HTML: {html_file}")
-        print(f"  • Excel: {excel_file}")
-        print(f"  • JSON: {json_file}")
-    
+
+    total = len(vin_list)
+    for idx, vin in enumerate(vin_list, 1):
+        print(f"\n[{idx}/{total}] Обработка VIN: {vin}")
+        result = parser.parse_by_vin(
+            vin=vin,
+            search_reviews=True,
+            get_additional=True,
+            max_reviews=20,
+            use_mock_data=True,
+        )
+
+        if result.get("error"):
+            print(f"  ❌ Ошибка: {result['error']}")
+
+
     print("\n✅ Готово!")
 
 # ==================== ЗАПУСК ====================
