@@ -212,6 +212,7 @@ def parse_gibdd_response(gibdd_data: Dict) -> VehicleInfo:
     reuse_driver=True,
     max_retry=3
 )
+
 def get_additional_info(driver: Driver, data: Dict) -> Dict:
     """Placeholder for fetching additional vehicle information.
 
@@ -582,8 +583,9 @@ class VINParser:
         else:
             print("  ✗ Не удалось получить данные из ГИБДД")
             return result
-        
+
         # 2. Поиск отзывов
+
         if search_reviews and vehicle_info:
             print("\n📝 Этап 2: Поиск отзывов владельцев...")
 
