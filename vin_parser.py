@@ -38,6 +38,25 @@ class VehicleInfo:
     technical_specs: Dict = None
     reviews: List[Dict] = None
 
+
+# ==================== УТИЛИТЫ ====================
+
+def validate_required_keys(data: Dict, required_keys: List[str], func_name: str) -> None:
+    """Validate that all required keys exist in the provided data dict.
+
+    Args:
+        data: Input dictionary passed to a browser-decorated function.
+        required_keys: Keys that must be present in ``data``.
+        func_name: Name of the function for clearer error messages.
+
+    Raises:
+        ValueError: If any of the required keys are missing.
+    """
+    missing = [key for key in required_keys if key not in data or data[key] is None]
+    if missing:
+        missing_keys = ", ".join(missing)
+        raise ValueError(f"Missing required keys for {func_name}: {missing_keys}")
+
 # ==================== API ГИБДД ====================
 
 @request(
@@ -194,6 +213,7 @@ def parse_gibdd_response(gibdd_data: Dict) -> VehicleInfo:
     max_retry=3
 )
 def get_additional_info(driver: Driver, data: Dict) -> Dict:
+
     """
     Получение дополнительной информации с auto.ru и других источников
     """
@@ -203,7 +223,7 @@ def get_additional_info(driver: Driver, data: Dict) -> Dict:
     model = data["model"]
 
     additional_info = {}
-    
+
     try:
         # Auto.ru - проверка на ДТП, пробег, количество владельцев
         print("  📊 Проверяем историю на Auto.ru...")
@@ -268,12 +288,12 @@ def get_additional_info(driver: Driver, data: Dict) -> Dict:
     max_retry=3
 )
 def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
-    """
-    Улучшенный поиск отзывов с учетом данных из ГИБДД
-    """
 
-    vehicle_info = VehicleInfo(**data["vehicle_info"])
-    max_reviews = data.get("max_reviews", 20)
+    """Улучшенный поиск отзывов с учетом данных из ГИБДД"""
+
+    vehicle_info: VehicleInfo = data["vehicle_info"]
+    max_reviews: int = data.get("max_reviews", 20)
+
 
     reviews = []
 
@@ -628,11 +648,15 @@ class VINParser:
         # 2. Получение дополнительной информации
         if get_additional and vehicle_info:
             print("\n📈 Этап 2: Сбор дополнительной информации...")
-            additional = get_additional_info({
+
+            additional_data = {
                 "vin": vin,
                 "brand": vehicle_info.brand,
-                "model": vehicle_info.model
-            })
+                "model": vehicle_info.model,
+            }
+            validate_required_keys(additional_data, ["vin", "brand", "model"], "get_additional_info")
+            additional = get_additional_info(additional_data)
+
             result["additional_info"] = additional
             
             if additional:
@@ -646,7 +670,14 @@ class VINParser:
         # 3. Поиск отзывов
         if search_reviews and vehicle_info:
             print("\n📝 Этап 3: Поиск отзывов владельцев...")
-            reviews = search_reviews_enhanced({"vehicle_info": asdict(vehicle_info), "max_reviews": max_reviews})
+
+            reviews_data = {
+                "vehicle_info": vehicle_info,
+                "max_reviews": max_reviews,
+            }
+            validate_required_keys(reviews_data, ["vehicle_info"], "search_reviews_enhanced")
+            reviews = search_reviews_enhanced(reviews_data)
+
             result["reviews"] = reviews
             
             # Статистика по отзывам
