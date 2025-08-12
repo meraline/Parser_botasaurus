@@ -212,15 +212,9 @@ def parse_gibdd_response(gibdd_data: Dict) -> VehicleInfo:
     reuse_driver=True,
     max_retry=3
 )
-def get_additional_info(driver: Driver, data: Dict) -> Dict:
+def get_additional_info(driver: Driver, vin: str, brand: str, model: str) -> Dict:
 
-    """
-    Получение дополнительной информации с auto.ru и других источников
-    """
-
-    vin = data["vin"]
-    brand = data["brand"]
-    model = data["model"]
+    """Получение дополнительной информации с auto.ru и других источников"""
 
     additional_info = {}
 
@@ -649,13 +643,12 @@ class VINParser:
         if get_additional and vehicle_info:
             print("\n📈 Этап 2: Сбор дополнительной информации...")
 
-            additional_data = {
-                "vin": vin,
-                "brand": vehicle_info.brand,
-                "model": vehicle_info.model,
-            }
-            validate_required_keys(additional_data, ["vin", "brand", "model"], "get_additional_info")
-            additional = get_additional_info(additional_data)
+            validate_required_keys(
+                {"vin": vin, "brand": vehicle_info.brand, "model": vehicle_info.model},
+                ["vin", "brand", "model"],
+                "get_additional_info",
+            )
+            additional = get_additional_info(vin, vehicle_info.brand, vehicle_info.model)
 
             result["additional_info"] = additional
             
