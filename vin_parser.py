@@ -13,7 +13,7 @@ import re
 import time
 import json
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 # ==================== МОДЕЛЬ ДАННЫХ ====================
 
@@ -263,13 +263,16 @@ def get_additional_info(driver: Driver, vin: str, brand: str, model: str) -> Dic
     reuse_driver=True,
     max_retry=3
 )
-def search_reviews_enhanced(driver: Driver, vehicle_info: VehicleInfo, max_reviews: int = 20) -> List[Dict]:
+def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
     """
     Улучшенный поиск отзывов с учетом данных из ГИБДД
     """
-    
+
+    vehicle_info = VehicleInfo(**data["vehicle_info"])
+    max_reviews = data.get("max_reviews", 20)
+
     reviews = []
-    
+
     if not vehicle_info.brand or not vehicle_info.model:
         print("  ⚠️ Недостаточно данных для поиска отзывов")
         return reviews
@@ -639,7 +642,7 @@ class VINParser:
         # 3. Поиск отзывов
         if search_reviews and vehicle_info:
             print("\n📝 Этап 3: Поиск отзывов владельцев...")
-            reviews = search_reviews_enhanced(vehicle_info, max_reviews)
+            reviews = search_reviews_enhanced({"vehicle_info": asdict(vehicle_info), "max_reviews": max_reviews})
             result["reviews"] = reviews
             
             # Статистика по отзывам
