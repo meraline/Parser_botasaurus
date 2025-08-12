@@ -1,0 +1,29 @@
+Traceback (most recent call last):
+  File "/home/analityk/anaconda3/lib/python3.12/site-packages/botasaurus/browser_decorator.py", line 201, in run_task
+    result = func(driver, data)
+             ^^^^^^^^^^^^^^^^^^
+TypeError: get_additional_info() missing 2 required positional arguments: 'brand' and 'model'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/analityk/anaconda3/lib/python3.12/site-packages/botasaurus/browser_decorator.py", line 201, in run_task
+    result = func(driver, data)
+             ^^^^^^^^^^^^^^^^^^
+TypeError: get_additional_info() missing 2 required positional arguments: 'brand' and 'model'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/analityk/anaconda3/lib/python3.12/site-packages/botasaurus/browser_decorator.py", line 201, in run_task
+    result = func(driver, data)
+             ^^^^^^^^^^^^^^^^^^
+TypeError: get_additional_info() missing 2 required positional arguments: 'brand' and 'model'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/analityk/anaconda3/lib/python3.12/site-packages/botasaurus/browser_decorator.py", line 201, in run_task
+    result = func(driver, data)
+             ^^^^^^^^^^^^^^^^^^
+TypeError: get_additional_info() missing 2 required positional arguments: 'brand' and 'model'
