@@ -339,6 +339,7 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
         for card in review_cards:
             review_data = {
                 "source": "drom.ru",
+                "type": "review",
                 "brand": vehicle_info.brand,
                 "model": vehicle_info.model,
                 "year": vehicle_info.year,
@@ -418,6 +419,7 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
         for card in drive2_cards:
             review_data = {
                 "source": "drive2.ru",
+                "type": "review",
                 "brand": vehicle_info.brand,
                 "model": vehicle_info.model,
                 "year": vehicle_info.year,
@@ -477,8 +479,151 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
         review['relevance_score'] = relevance_score
     
     reviews.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
-    
+
     return reviews[:max_reviews]
+
+
+# ==================== ПОИСК БОРТЖУРНАЛОВ ====================
+
+@browser(
+    block_images=False,
+    cache=True,
+    reuse_driver=True,
+    max_retry=3
+)
+def search_board_journals(driver: Driver, data: Dict) -> List[Dict]:
+    """Поиск записей бортжурналов на Drom.ru и Drive2.ru"""
+
+    vehicle_info: VehicleInfo = data["vehicle_info"]
+    max_entries: int = data.get("max_entries", 20)
+
+    entries: List[Dict] = []
+
+    if not vehicle_info.brand or not vehicle_info.model:
+        print("  ⚠️ Недостаточно данных для поиска бортжурналов")
+        return entries
+
+    brand_normalized = vehicle_info.brand.lower().replace(' ', '-').replace('_', '-')
+    model_normalized = vehicle_info.model.lower().replace(' ', '-').replace('_', '-')
+
+    brand_url_mapping = {
+        'mitsubishi': 'mitsubishi',
+        'volkswagen': 'volkswagen',
+        'mercedes-benz': 'mercedes',
+        'bmw': 'bmw',
+        'toyota': 'toyota',
+        'nissan': 'nissan',
+        'mazda': 'mazda',
+        'honda': 'honda',
+        'hyundai': 'hyundai',
+        'kia': 'kia',
+        'ford': 'ford',
+        'chevrolet': 'chevrolet',
+        'lada': 'lada',
+        'vaz': 'vaz'
+    }
+
+    brand_for_url = brand_url_mapping.get(brand_normalized, brand_normalized)
+
+    model_url_mapping = {
+        'outlander': 'outlander',
+        'asx': 'asx',
+        'pajero': 'pajero',
+        'lancer': 'lancer',
+        'eclipse cross': 'eclipse-cross',
+        'l200': 'l200'
+    }
+
+    model_for_url = model_url_mapping.get(model_normalized, model_normalized)
+
+    print(f"\n🔍 Поиск бортжурналов для {vehicle_info.brand} {vehicle_info.model}")
+
+    # === DROM.RU БОРТЖУРНАЛ ===
+    try:
+        print("  📔 Бортжурналы на Drom.ru...")
+        drom_url = f"https://www.drom.ru/bjournal/{brand_for_url}/{model_for_url}/"
+        driver.google_get(drom_url, bypass_cloudflare=True)
+        driver.sleep(2)
+
+        bj_cards = driver.select_all('article')[:max_entries//2]
+
+        for card in bj_cards:
+            entry = {
+                "source": "drom.ru",
+                "type": "board_journal",
+                "brand": vehicle_info.brand,
+                "model": vehicle_info.model,
+                "year": vehicle_info.year
+            }
+
+            title_elem = card.select('a')
+            if title_elem:
+                entry['title'] = title_elem.get_text(strip=True)
+                href = title_elem.get_attribute('href')
+                if href and not href.startswith('http'):
+                    href = f"https://www.drom.ru{href}"
+                entry['url'] = href
+
+            preview_elem = card.select('p')
+            if preview_elem:
+                entry['preview'] = preview_elem.get_text(strip=True)[:200]
+
+            entries.append(entry)
+
+        print(f"    ✓ Найдено {len([e for e in entries if e['source'] == 'drom.ru'])} бортжурналов на Drom.ru")
+    except Exception as e:
+        print(f"    ✗ Ошибка при поиске бортжурналов на Drom.ru: {e}")
+
+    # === DRIVE2.RU БОРТЖУРНАЛ ===
+    try:
+        print("  📔 Бортжурналы на Drive2.ru...")
+
+        drive2_brand_mapping = {
+            'mitsubishi': 'mitsubishi',
+            'volkswagen': 'volkswagen',
+            'mercedes-benz': 'mercedes-benz',
+            'toyota': 'toyota',
+            'nissan': 'nissan',
+            'mazda': 'mazda',
+            'honda': 'honda'
+        }
+
+        drive2_brand = drive2_brand_mapping.get(brand_normalized, brand_for_url)
+        drive2_url = f"https://www.drive2.ru/board/{drive2_brand}/{model_for_url}/"
+
+        driver.get_via_this_page(drive2_url)
+        driver.sleep(2)
+
+        drive2_cards = driver.select_all('.c-post-card')[:max_entries//2]
+
+        for card in drive2_cards:
+            entry = {
+                "source": "drive2.ru",
+                "type": "board_journal",
+                "brand": vehicle_info.brand,
+                "model": vehicle_info.model,
+                "year": vehicle_info.year
+            }
+
+            title_elem = card.select('a')
+            if title_elem:
+                entry['title'] = title_elem.get_text(strip=True)
+                href = title_elem.get_attribute('href')
+                if href and not href.startswith('http'):
+                    href = f"https://www.drive2.ru{href}"
+                entry['url'] = href
+
+            preview_elem = card.select('p')
+            if preview_elem:
+                entry['preview'] = preview_elem.get_text(strip=True)[:200]
+
+            entries.append(entry)
+
+        print(f"    ✓ Найдено {len([e for e in entries if e['source'] == 'drive2.ru'])} бортжурналов на Drive2.ru")
+    except Exception as e:
+        print(f"    ✗ Ошибка при поиске бортжурналов на Drive2.ru: {e}")
+
+    return entries[:max_entries]
 
 # ==================== ГЛАВНЫЙ КЛАСС VIN-ПАРСЕРА ====================
 
@@ -504,8 +649,11 @@ class VINParser:
         self,
         vin: str,
         search_reviews: bool = True,
+        get_additional: bool = True,
+
         max_reviews: int = 20,
-        use_mock_data: bool = False
+        use_mock_data: bool = False,
+        include_board_journals: bool = False
     ) -> Dict:
         """
         Главная функция парсинга по VIN
@@ -515,6 +663,7 @@ class VINParser:
             search_reviews: Искать ли отзывы
             max_reviews: Максимальное количество отзывов
             use_mock_data: Использовать тестовые данные (для демонстрации)
+            include_board_journals: Искать ли записи бортжурналов
         """
         
         # Валидация и нормализация VIN
@@ -617,6 +766,18 @@ class VINParser:
 
         # 2. Поиск отзывов
 
+            result["additional_info"] = additional
+            
+            if additional:
+                if 'accidents' in additional:
+                    print(f"    • ДТП: {additional['accidents']}")
+                if 'mileage' in additional:
+                    print(f"    • Пробег: {additional['mileage']}")
+                if 'restrictions' in additional:
+                    print(f"    • Ограничения: {additional['restrictions']}")
+        
+        # 3. Поиск отзывов и бортжурналов
+
         if search_reviews and vehicle_info:
             print("\n📝 Этап 2: Поиск отзывов владельцев...")
 
@@ -627,17 +788,26 @@ class VINParser:
             validate_required_keys(reviews_data, ["vehicle_info"], "search_reviews_enhanced")
             reviews = search_reviews_enhanced(reviews_data)
 
+            if include_board_journals:
+                print("  📔 Поиск бортжурналов...")
+                bj_data = {
+                    "vehicle_info": vehicle_info,
+                    "max_entries": max_reviews,
+                }
+                validate_required_keys(bj_data, ["vehicle_info"], "search_board_journals")
+                reviews.extend(search_board_journals(bj_data))
+
             result["reviews"] = reviews
-            
+
             # Статистика по отзывам
             drom_count = len([r for r in reviews if r['source'] == 'drom.ru'])
             drive2_count = len([r for r in reviews if r['source'] == 'drive2.ru'])
-            
-            print(f"\n  📊 Статистика отзывов:")
+
+            print(f"\n  📊 Статистика отзывов и бортжурналов:")
             print(f"    • Всего найдено: {len(reviews)}")
             print(f"    • Drom.ru: {drom_count}")
             print(f"    • Drive2.ru: {drive2_count}")
-            
+
             # Отзывы с точным совпадением
             exact_matches = [r for r in reviews if r.get('year_match') or r.get('engine_match')]
             if exact_matches:
