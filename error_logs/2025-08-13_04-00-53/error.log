@@ -1,0 +1,41 @@
+Traceback (most recent call last):
+  File "/home/analityk/anaconda3/lib/python3.12/site-packages/botasaurus/browser_decorator.py", line 201, in run_task
+    result = func(driver, data)
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/analityk/Документы/projects/Parser_botasaurus/vin_parser.py", line 272, in search_reviews_enhanced
+    if not vehicle_info.brand or not vehicle_info.model:
+           ^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'brand'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/analityk/anaconda3/lib/python3.12/site-packages/botasaurus/browser_decorator.py", line 201, in run_task
+    result = func(driver, data)
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/analityk/Документы/projects/Parser_botasaurus/vin_parser.py", line 272, in search_reviews_enhanced
+    if not vehicle_info.brand or not vehicle_info.model:
+           ^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'brand'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/analityk/anaconda3/lib/python3.12/site-packages/botasaurus/browser_decorator.py", line 201, in run_task
+    result = func(driver, data)
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/analityk/Документы/projects/Parser_botasaurus/vin_parser.py", line 272, in search_reviews_enhanced
+    if not vehicle_info.brand or not vehicle_info.model:
+           ^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'brand'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/analityk/anaconda3/lib/python3.12/site-packages/botasaurus/browser_decorator.py", line 201, in run_task
+    result = func(driver, data)
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/analityk/Документы/projects/Parser_botasaurus/vin_parser.py", line 272, in search_reviews_enhanced
+    if not vehicle_info.brand or not vehicle_info.model:
+           ^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'brand'

@@ -1,0 +1,60 @@
+{
+    "status": 200,
+    "response": {
+        "status": 200,
+        "found": true,
+        "utilicazia": 0,
+        "utilicaziainfo": "",
+        "vehicle": {
+            "vin": "JMBXTGF2WDZ013380",
+            "bodyNumber": "JMBXTGF2WDZ013380",
+            "engineNumber": "9459",
+            "model": "МИЦУБИСИ АУТЛЕНДЕР 2.0 ",
+            "color": "Белый",
+            "year": "2013",
+            "engineVolume": "1998.0",
+            "powerHp": "146.0",
+            "powerKwt": "107.4",
+            "category": "В",
+            "type": "21",
+            "typeinfo": "Легковые автомобили универсал"
+        },
+        "vehiclePassport": {
+            "number": "78УТ410971",
+            "issue": "ТАМОЖНЯ: 10009194"
+        },
+        "ownershipPeriod": [
+            {
+                "lastOperation": "07",
+                "lastOperationInfo": "прекращение регистрации в том числе",
+                "simplePersonType": "Natural",
+                "simplePersonTypeInfo": "Физическое лицо",
+                "from": "19.10.2013",
+                "to": "2024-07-20",
+                "period": "10 лет 9 месяцев 7 дней"
+            },
+            {
+                "lastOperation": "02",
+                "lastOperationInfo": "регистрация ранее зарегистрированных в регистрирующих органах",
+                "simplePersonType": "Natural",
+                "simplePersonTypeInfo": "Физическое лицо",
+                "from": "03.08.2024",
+                "to": "null",
+                "period": "1 год 10 дней"
+            }
+        ],
+        "inquiry": {
+            "price": 0.5,
+            "balance": 767.97,
+            "credit": 0,
+            "speed": 0,
+            "attempts": 1
+        }
+    },
+    "responseTime": 886,
+    "cost": 0.5,
+    "success": true,
+    "testQuery": "JMBXTGF2WDZ013380",
+    "apiName": "gibdd",
+    "method": "gibdd"
+}
