@@ -1,8 +1,3 @@
-"""
-VIN-парсер с API ГИБДД и автоматическим поиском отзывов
-Получает официальные данные из ГИБДД и собирает отзывы по модели
-"""
-
 from botasaurus.browser import browser, Driver
 from botasaurus.request import request, Request
 from botasaurus.soupify import soupify
@@ -39,6 +34,23 @@ class VehicleInfo:
     technical_specs: Dict = None
     reviews: List[Dict] = None
 
+    def __post_init__(self):
+        """Инициализация пустых списков и словарей"""
+        if self.ownership_history is None:
+            self.ownership_history = []
+        if self.technical_specs is None:
+            self.technical_specs = {}
+        if self.reviews is None:
+            self.reviews = []
+    
+    def to_dict(self) -> Dict:
+        """Преобразование в словарь для сериализации"""
+        return asdict(self)
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'VehicleInfo':
+        """Создание объекта из словаря"""
+        return cls(**data)
 
 # ==================== УТИЛИТЫ ====================
 
@@ -57,6 +69,30 @@ def validate_required_keys(data: Dict, required_keys: List[str], func_name: str)
     if missing:
         missing_keys = ", ".join(missing)
         raise ValueError(f"Missing required keys for {func_name}: {missing_keys}")
+
+
+def validate_vehicle_info(vehicle_info, func_name: str) -> bool:
+    """Проверка корректности объекта VehicleInfo"""
+    if vehicle_info is None:
+        print(f"  ⚠️ {func_name}: vehicle_info is None")
+        return False
+    
+    # Поддержка как объектов VehicleInfo, так и словарей
+    if isinstance(vehicle_info, dict):
+        brand = vehicle_info.get('brand')
+        model = vehicle_info.get('model')
+    elif hasattr(vehicle_info, 'brand') and hasattr(vehicle_info, 'model'):
+        brand = vehicle_info.brand
+        model = vehicle_info.model
+    else:
+        print(f"  ⚠️ {func_name}: vehicle_info missing required attributes")
+        return False
+    
+    if not brand or not model:
+        print(f"  ⚠️ {func_name}: brand or model is empty")
+        return False
+    
+    return True
 
 
 def load_vins(path: str) -> List[str]:
@@ -138,18 +174,28 @@ def get_gibdd_data(request: Request, vin: str, api_key: str = None) -> Dict:
         print(f"Ошибка при запросе к API ГИБДД: {e}")
         return None
 
-def parse_gibdd_response(gibdd_data: Dict) -> VehicleInfo:
+def parse_gibdd_response(gibdd_data: Dict) -> Optional[VehicleInfo]:
     """
     Парсинг ответа от API ГИБДД в структуру VehicleInfo
     """
     
     if not gibdd_data or not gibdd_data.get('success'):
+        print("  ✗ Нет данных ГИБДД или запрос неуспешен")
         return None
     
     response = gibdd_data.get('response', {})
+    if not response.get('found', False):
+        print("  ✗ Автомобиль не найден в базе ГИБДД")
+        return None
+        
     vehicle = response.get('vehicle', {})
     passport = response.get('vehiclePassport', {})
     ownership = response.get('ownershipPeriod', [])
+    
+    # Проверяем обязательные поля
+    if not vehicle.get('vin'):
+        print("  ✗ Отсутствует VIN в ответе ГИБДД")
+        return None
     
     # Извлекаем марку и модель из полного названия
     full_model = vehicle.get('model', '')
@@ -193,7 +239,7 @@ def parse_gibdd_response(gibdd_data: Dict) -> VehicleInfo:
             # Пропускаем числа с точкой (объем двигателя)
             if not re.match(r'^\d+\.\d+$', part):
                 model_parts_clean.append(part.capitalize())
-        model = ' '.join(model_parts_clean) if model_parts_clean else model_parts[1] if len(model_parts) > 1 else None
+        model = ' '.join(model_parts_clean) if model_parts_clean else (model_parts[1] if len(model_parts) > 1 else None)
     
     # Преобразуем историю владения
     ownership_history = []
@@ -208,32 +254,37 @@ def parse_gibdd_response(gibdd_data: Dict) -> VehicleInfo:
         ownership_history.append(ownership_entry)
     
     # Создаем объект VehicleInfo
-    vehicle_info = VehicleInfo(
-        vin=vehicle.get('vin', ''),
-        brand=brand,
-        model=model,
-        year=int(vehicle.get('year', 0)) if vehicle.get('year') else None,
-        engine_volume=vehicle.get('engineVolume', ''),
-        power_hp=vehicle.get('powerHp', ''),
-        power_kwt=vehicle.get('powerKwt', ''),
-        color=vehicle.get('color', ''),
-        body_number=vehicle.get('bodyNumber', ''),
-        engine_number=vehicle.get('engineNumber', ''),
-        category=vehicle.get('category', ''),
-        type_info=vehicle.get('typeinfo', ''),
-        pts_number=passport.get('number', ''),
-        pts_issue=passport.get('issue', ''),
-        ownership_history=ownership_history,
-        technical_specs={
-            'engine_volume': vehicle.get('engineVolume', ''),
-            'power_hp': vehicle.get('powerHp', ''),
-            'power_kwt': vehicle.get('powerKwt', ''),
-            'category': vehicle.get('category', ''),
-            'type': vehicle.get('typeinfo', '')
-        }
-    )
-    
-    return vehicle_info
+    try:
+        vehicle_info = VehicleInfo(
+            vin=vehicle.get('vin', ''),
+            brand=brand,
+            model=model,
+            year=int(vehicle.get('year', 0)) if vehicle.get('year') else None,
+            engine_volume=vehicle.get('engineVolume', ''),
+            power_hp=vehicle.get('powerHp', ''),
+            power_kwt=vehicle.get('powerKwt', ''),
+            color=vehicle.get('color', ''),
+            body_number=vehicle.get('bodyNumber', ''),
+            engine_number=vehicle.get('engineNumber', ''),
+            category=vehicle.get('category', ''),
+            type_info=vehicle.get('typeinfo', ''),
+            pts_number=passport.get('number', ''),
+            pts_issue=passport.get('issue', ''),
+            ownership_history=ownership_history,
+            technical_specs={
+                'engine_volume': vehicle.get('engineVolume', ''),
+                'power_hp': vehicle.get('powerHp', ''),
+                'power_kwt': vehicle.get('powerKwt', ''),
+                'category': vehicle.get('category', ''),
+                'type': vehicle.get('typeinfo', '')
+            }
+        )
+        
+        return vehicle_info
+        
+    except Exception as e:
+        print(f"  ✗ Ошибка при создании VehicleInfo: {e}")
+        return None
 
 # ==================== ДОПОЛНИТЕЛЬНЫЕ ИСТОЧНИКИ ДАННЫХ ====================
 
@@ -243,13 +294,46 @@ def parse_gibdd_response(gibdd_data: Dict) -> VehicleInfo:
     reuse_driver=True,
     max_retry=3
 )
-
 def get_additional_info(driver: Driver, data: Dict) -> Dict:
-    """Placeholder for fetching additional vehicle information.
-
-    Currently no external sources are queried.
     """
-    return {}
+    Получение дополнительной информации об автомобиле
+    
+    Args:
+        data: Dict содержащий vehicle_info (словарь или объект VehicleInfo)
+    """
+    # Валидация входных данных
+    validate_required_keys(data, ["vehicle_info"], "get_additional_info")
+    
+    vehicle_info = data["vehicle_info"]
+    
+    # Проверяем что vehicle_info корректен
+    if not validate_vehicle_info(vehicle_info, "get_additional_info"):
+        return {}
+    
+    # Получаем данные в зависимости от типа vehicle_info
+    if isinstance(vehicle_info, dict):
+        brand = vehicle_info.get('brand')
+        model = vehicle_info.get('model')
+    else:
+        brand = vehicle_info.brand
+        model = vehicle_info.model
+    
+    print(f"  🔍 Поиск дополнительной информации для {brand} {model}")
+    
+    # Здесь может быть логика получения дополнительных данных
+    # Например, проверка на ДТП, угоны, ограничения и т.д.
+    
+    additional_info = {
+        "accidents": "Нет данных",
+        "mileage": "Нет данных", 
+        "restrictions": "Нет данных",
+        "theft_history": "Нет данных"
+    }
+    
+    # Placeholder для реальной логики поиска дополнительной информации
+    # В будущем здесь можно добавить запросы к различным базам данных
+    
+    return additional_info
 
 # ==================== ПОИСК ОТЗЫВОВ ====================
 
@@ -260,22 +344,37 @@ def get_additional_info(driver: Driver, data: Dict) -> Dict:
     max_retry=3
 )
 def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
-
     """Улучшенный поиск отзывов с учетом данных из ГИБДД"""
-
-    vehicle_info: VehicleInfo = data["vehicle_info"]
-    max_reviews: int = data.get("max_reviews", 20)
-
-
+    
+    # Валидация входных данных
+    validate_required_keys(data, ["vehicle_info"], "search_reviews_enhanced")
+    
+    vehicle_info = data["vehicle_info"]
+    max_reviews = data.get("max_reviews", 20)
+    
     reviews = []
-
-    if not vehicle_info.brand or not vehicle_info.model:
-        print("  ⚠️ Недостаточно данных для поиска отзывов")
+    
+    # Проверяем корректность vehicle_info
+    if not validate_vehicle_info(vehicle_info, "search_reviews_enhanced"):
         return reviews
     
+    # Получаем данные в зависимости от типа vehicle_info
+    if isinstance(vehicle_info, dict):
+        brand = vehicle_info.get('brand')
+        model = vehicle_info.get('model')
+        year = vehicle_info.get('year')
+        engine_volume = vehicle_info.get('engine_volume')
+    else:
+        brand = vehicle_info.brand
+        model = vehicle_info.model
+        year = vehicle_info.year
+        engine_volume = vehicle_info.engine_volume
+    
+    print(f"  🔍 Поиск отзывов для {brand} {model} {year}")
+    
     # Нормализуем названия для URL
-    brand_normalized = vehicle_info.brand.lower().replace(' ', '-').replace('_', '-')
-    model_normalized = vehicle_info.model.lower().replace(' ', '-').replace('_', '-')
+    brand_normalized = brand.lower().replace(' ', '-').replace('_', '-')
+    model_normalized = model.lower().replace(' ', '-').replace('_', '-')
     
     # Специальная обработка для некоторых брендов
     brand_url_mapping = {
@@ -300,6 +399,7 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
     # Специальная обработка моделей
     model_url_mapping = {
         'outlander': 'outlander',
+        'аутлендер': 'outlander',
         'asx': 'asx',
         'pajero': 'pajero',
         'lancer': 'lancer',
@@ -309,11 +409,9 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
     
     model_for_url = model_url_mapping.get(model_normalized, model_normalized)
     
-    print(f"\n🔍 Поиск отзывов для {vehicle_info.brand} {vehicle_info.model} {vehicle_info.year}")
-    
     # === DROM.RU ===
     try:
-        print("  📋 Поиск на Drom.ru...")
+        print("    📋 Поиск на Drom.ru...")
         drom_url = f"https://www.drom.ru/reviews/{brand_for_url}/{model_for_url}/"
         
         driver.google_get(drom_url, bypass_cloudflare=True)
@@ -322,13 +420,13 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
         # Если страница не найдена, пробуем альтернативный URL
         if driver.select('.error-page'):
             # Пробуем поиск
-            search_url = f"https://www.drom.ru/reviews/search/?text={vehicle_info.brand}+{vehicle_info.model}"
+            search_url = f"https://www.drom.ru/reviews/search/?text={brand}+{model}"
             driver.get_via_this_page(search_url)
             driver.sleep(2)
         
         # Фильтр по году если возможно
-        if vehicle_info.year:
-            year_links = driver.select_all(f'a[href*="{vehicle_info.year}"]')
+        if year:
+            year_links = driver.select_all(f'a[href*="{year}"]')
             if year_links:
                 year_links[0].click()
                 driver.sleep(2)
@@ -340,9 +438,9 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
             review_data = {
                 "source": "drom.ru",
                 "type": "review",
-                "brand": vehicle_info.brand,
-                "model": vehicle_info.model,
-                "year": vehicle_info.year,
+                "brand": brand,
+                "model": model,
+                "year": year,
                 "vin_checked": True
             }
             
@@ -369,8 +467,8 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
             if specs_elem:
                 specs_text = specs_elem.get_text(strip=True)
                 # Проверяем соответствие характеристикам
-                if vehicle_info.engine_volume:
-                    engine_vol_clean = vehicle_info.engine_volume.replace('.0', '').replace(',', '.')
+                if engine_volume:
+                    engine_vol_clean = engine_volume.replace('.0', '').replace(',', '.')
                     if engine_vol_clean in specs_text:
                         review_data['engine_match'] = True
             
@@ -381,14 +479,14 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
             
             reviews.append(review_data)
         
-        print(f"    ✓ Найдено {len(reviews)} отзывов на Drom.ru")
+        print(f"      ✓ Найдено {len([r for r in reviews if r['source'] == 'drom.ru'])} отзывов на Drom.ru")
         
     except Exception as e:
-        print(f"    ✗ Ошибка при поиске на Drom.ru: {e}")
+        print(f"      ✗ Ошибка при поиске на Drom.ru: {e}")
     
     # === DRIVE2.RU ===
     try:
-        print("  🚗 Поиск на Drive2.ru...")
+        print("    🚗 Поиск на Drive2.ru...")
         
         # Специальные URL для Drive2
         drive2_brand_mapping = {
@@ -409,7 +507,7 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
         
         # Если не найдено, используем поиск
         if driver.select('.c-error'):
-            search_url = f"https://www.drive2.ru/search/?q={vehicle_info.brand}+{vehicle_info.model}+{vehicle_info.year}"
+            search_url = f"https://www.drive2.ru/search/?q={brand}+{model}+{year}"
             driver.get_via_this_page(search_url)
             driver.sleep(2)
         
@@ -420,9 +518,9 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
             review_data = {
                 "source": "drive2.ru",
                 "type": "review",
-                "brand": vehicle_info.brand,
-                "model": vehicle_info.model,
-                "year": vehicle_info.year,
+                "brand": brand,
+                "model": model,
+                "year": year,
                 "vin_checked": True
             }
             
@@ -442,12 +540,12 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
                 review_data['car_info'] = info_text
                 
                 # Проверяем год
-                if vehicle_info.year and str(vehicle_info.year) in info_text:
+                if year and str(year) in info_text:
                     review_data['year_match'] = True
                 
                 # Проверяем двигатель
-                if vehicle_info.engine_volume:
-                    engine_vol_clean = vehicle_info.engine_volume.replace('.0', '').replace(',', '.')
+                if engine_volume:
+                    engine_vol_clean = engine_volume.replace('.0', '').replace(',', '.')
                     if engine_vol_clean in info_text:
                         review_data['engine_match'] = True
             
@@ -463,10 +561,10 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
             
             reviews.append(review_data)
         
-        print(f"    ✓ Найдено {len([r for r in reviews if r['source'] == 'drive2.ru'])} отзывов на Drive2.ru")
+        print(f"      ✓ Найдено {len([r for r in reviews if r['source'] == 'drive2.ru'])} отзывов на Drive2.ru")
         
     except Exception as e:
-        print(f"    ✗ Ошибка при поиске на Drive2.ru: {e}")
+        print(f"      ✗ Ошибка при поиске на Drive2.ru: {e}")
     
     # Сортируем отзывы по релевантности
     # Приоритет отзывам с совпадающим годом и двигателем
@@ -494,17 +592,32 @@ def search_reviews_enhanced(driver: Driver, data: Dict) -> List[Dict]:
 def search_board_journals(driver: Driver, data: Dict) -> List[Dict]:
     """Поиск записей бортжурналов на Drom.ru и Drive2.ru"""
 
-    vehicle_info: VehicleInfo = data["vehicle_info"]
-    max_entries: int = data.get("max_entries", 20)
+    # Валидация входных данных
+    validate_required_keys(data, ["vehicle_info"], "search_board_journals")
+    
+    vehicle_info = data["vehicle_info"]
+    max_entries = data.get("max_entries", 20)
 
-    entries: List[Dict] = []
+    entries = []
 
-    if not vehicle_info.brand or not vehicle_info.model:
-        print("  ⚠️ Недостаточно данных для поиска бортжурналов")
+    # Проверяем корректность vehicle_info
+    if not validate_vehicle_info(vehicle_info, "search_board_journals"):
         return entries
 
-    brand_normalized = vehicle_info.brand.lower().replace(' ', '-').replace('_', '-')
-    model_normalized = vehicle_info.model.lower().replace(' ', '-').replace('_', '-')
+    # Получаем данные в зависимости от типа vehicle_info
+    if isinstance(vehicle_info, dict):
+        brand = vehicle_info.get('brand')
+        model = vehicle_info.get('model')
+        year = vehicle_info.get('year')
+    else:
+        brand = vehicle_info.brand
+        model = vehicle_info.model
+        year = vehicle_info.year
+
+    print(f"  🔍 Поиск бортжурналов для {brand} {model}")
+
+    brand_normalized = brand.lower().replace(' ', '-').replace('_', '-')
+    model_normalized = model.lower().replace(' ', '-').replace('_', '-')
 
     brand_url_mapping = {
         'mitsubishi': 'mitsubishi',
@@ -527,6 +640,7 @@ def search_board_journals(driver: Driver, data: Dict) -> List[Dict]:
 
     model_url_mapping = {
         'outlander': 'outlander',
+        'аутлендер': 'outlander',
         'asx': 'asx',
         'pajero': 'pajero',
         'lancer': 'lancer',
@@ -536,11 +650,9 @@ def search_board_journals(driver: Driver, data: Dict) -> List[Dict]:
 
     model_for_url = model_url_mapping.get(model_normalized, model_normalized)
 
-    print(f"\n🔍 Поиск бортжурналов для {vehicle_info.brand} {vehicle_info.model}")
-
     # === DROM.RU БОРТЖУРНАЛ ===
     try:
-        print("  📔 Бортжурналы на Drom.ru...")
+        print("    📔 Бортжурналы на Drom.ru...")
         drom_url = f"https://www.drom.ru/bjournal/{brand_for_url}/{model_for_url}/"
         driver.google_get(drom_url, bypass_cloudflare=True)
         driver.sleep(2)
@@ -551,9 +663,9 @@ def search_board_journals(driver: Driver, data: Dict) -> List[Dict]:
             entry = {
                 "source": "drom.ru",
                 "type": "board_journal",
-                "brand": vehicle_info.brand,
-                "model": vehicle_info.model,
-                "year": vehicle_info.year
+                "brand": brand,
+                "model": model,
+                "year": year
             }
 
             title_elem = card.select('a')
@@ -570,13 +682,13 @@ def search_board_journals(driver: Driver, data: Dict) -> List[Dict]:
 
             entries.append(entry)
 
-        print(f"    ✓ Найдено {len([e for e in entries if e['source'] == 'drom.ru'])} бортжурналов на Drom.ru")
+        print(f"      ✓ Найдено {len([e for e in entries if e['source'] == 'drom.ru'])} бортжурналов на Drom.ru")
     except Exception as e:
-        print(f"    ✗ Ошибка при поиске бортжурналов на Drom.ru: {e}")
+        print(f"      ✗ Ошибка при поиске бортжурналов на Drom.ru: {e}")
 
     # === DRIVE2.RU БОРТЖУРНАЛ ===
     try:
-        print("  📔 Бортжурналы на Drive2.ru...")
+        print("    📔 Бортжурналы на Drive2.ru...")
 
         drive2_brand_mapping = {
             'mitsubishi': 'mitsubishi',
@@ -600,9 +712,9 @@ def search_board_journals(driver: Driver, data: Dict) -> List[Dict]:
             entry = {
                 "source": "drive2.ru",
                 "type": "board_journal",
-                "brand": vehicle_info.brand,
-                "model": vehicle_info.model,
-                "year": vehicle_info.year
+                "brand": brand,
+                "model": model,
+                "year": year
             }
 
             title_elem = card.select('a')
@@ -619,9 +731,9 @@ def search_board_journals(driver: Driver, data: Dict) -> List[Dict]:
 
             entries.append(entry)
 
-        print(f"    ✓ Найдено {len([e for e in entries if e['source'] == 'drive2.ru'])} бортжурналов на Drive2.ru")
+        print(f"      ✓ Найдено {len([e for e in entries if e['source'] == 'drive2.ru'])} бортжурналов на Drive2.ru")
     except Exception as e:
-        print(f"    ✗ Ошибка при поиске бортжурналов на Drive2.ru: {e}")
+        print(f"      ✗ Ошибка при поиске бортжурналов на Drive2.ru: {e}")
 
     return entries[:max_entries]
 
@@ -650,7 +762,6 @@ class VINParser:
         vin: str,
         search_reviews: bool = True,
         get_additional: bool = True,
-
         max_reviews: int = 20,
         use_mock_data: bool = False,
         include_board_journals: bool = False
@@ -661,6 +772,7 @@ class VINParser:
         Args:
             vin: VIN-код автомобиля
             search_reviews: Искать ли отзывы
+            get_additional: Искать ли дополнительную информацию
             max_reviews: Максимальное количество отзывов
             use_mock_data: Использовать тестовые данные (для демонстрации)
             include_board_journals: Искать ли записи бортжурналов
@@ -750,6 +862,11 @@ class VINParser:
             
             # Парсим данные ГИБДД
             vehicle_info = parse_gibdd_response(gibdd_response)
+            
+            if vehicle_info is None:
+                print("  ✗ Не удалось распарсить данные ГИБДД")
+                return result
+                
             result["vehicle_info"] = vehicle_info
             
             print(f"  ✓ Получены официальные данные:")
@@ -764,56 +881,68 @@ class VINParser:
             print("  ✗ Не удалось получить данные из ГИБДД")
             return result
 
-        # 2. Поиск отзывов
-
-            result["additional_info"] = additional
+        # 2. Поиск дополнительной информации
+        if get_additional and vehicle_info:
+            print("\n🔍 Этап 2: Поиск дополнительной информации...")
             
-            if additional:
-                if 'accidents' in additional:
-                    print(f"    • ДТП: {additional['accidents']}")
-                if 'mileage' in additional:
-                    print(f"    • Пробег: {additional['mileage']}")
-                if 'restrictions' in additional:
-                    print(f"    • Ограничения: {additional['restrictions']}")
+            try:
+                additional_data = {
+                    "vehicle_info": vehicle_info
+                }
+                additional = get_additional_info(additional_data)
+                result["additional_info"] = additional
+                
+                if additional:
+                    if 'accidents' in additional:
+                        print(f"    • ДТП: {additional['accidents']}")
+                    if 'mileage' in additional:
+                        print(f"    • Пробег: {additional['mileage']}")
+                    if 'restrictions' in additional:
+                        print(f"    • Ограничения: {additional['restrictions']}")
+            except Exception as e:
+                print(f"    ✗ Ошибка при получении дополнительной информации: {e}")
+                result["additional_info"] = {}
         
         # 3. Поиск отзывов и бортжурналов
-
         if search_reviews and vehicle_info:
-            print("\n📝 Этап 2: Поиск отзывов владельцев...")
+            print("\n📝 Этап 3: Поиск отзывов владельцев...")
 
-            reviews_data = {
-                "vehicle_info": vehicle_info,
-                "max_reviews": max_reviews,
-            }
-            validate_required_keys(reviews_data, ["vehicle_info"], "search_reviews_enhanced")
-            reviews = search_reviews_enhanced(reviews_data)
-
-            if include_board_journals:
-                print("  📔 Поиск бортжурналов...")
-                bj_data = {
+            try:
+                reviews_data = {
                     "vehicle_info": vehicle_info,
-                    "max_entries": max_reviews,
+                    "max_reviews": max_reviews,
                 }
-                validate_required_keys(bj_data, ["vehicle_info"], "search_board_journals")
-                reviews.extend(search_board_journals(bj_data))
+                reviews = search_reviews_enhanced(reviews_data)
 
-            result["reviews"] = reviews
+                if include_board_journals:
+                    print("  📔 Поиск бортжурналов...")
+                    bj_data = {
+                        "vehicle_info": vehicle_info,
+                        "max_entries": max_reviews,
+                    }
+                    board_journals = search_board_journals(bj_data)
+                    reviews.extend(board_journals)
 
-            # Статистика по отзывам
-            drom_count = len([r for r in reviews if r['source'] == 'drom.ru'])
-            drive2_count = len([r for r in reviews if r['source'] == 'drive2.ru'])
+                result["reviews"] = reviews
 
-            print(f"\n  📊 Статистика отзывов и бортжурналов:")
-            print(f"    • Всего найдено: {len(reviews)}")
-            print(f"    • Drom.ru: {drom_count}")
-            print(f"    • Drive2.ru: {drive2_count}")
+                # Статистика по отзывам
+                drom_count = len([r for r in reviews if r['source'] == 'drom.ru'])
+                drive2_count = len([r for r in reviews if r['source'] == 'drive2.ru'])
 
-            # Отзывы с точным совпадением
-            exact_matches = [r for r in reviews if r.get('year_match') or r.get('engine_match')]
-            if exact_matches:
-                print(f"    • С точным совпадением характеристик: {len(exact_matches)}")
+                print(f"\n  📊 Статистика отзывов и бортжурналов:")
+                print(f"    • Всего найдено: {len(reviews)}")
+                print(f"    • Drom.ru: {drom_count}")
+                print(f"    • Drive2.ru: {drive2_count}")
+
+                # Отзывы с точным совпадением
+                exact_matches = [r for r in reviews if r.get('year_match') or r.get('engine_match')]
+                if exact_matches:
+                    print(f"    • С точным совпадением характеристик: {len(exact_matches)}")
+            except Exception as e:
+                print(f"    ✗ Ошибка при поиске отзывов: {e}")
+                result["reviews"] = []
         
-        # 3. Формирование итогового резюме
+        # 4. Формирование итогового резюме
         if vehicle_info:
             result["summary"] = {
                 "vin": vin,
@@ -890,7 +1019,11 @@ class VINParser:
             return f"{filename}.xlsx"
             
         elif format == "json":
-            bt.write_json(result, filename)
+            # Преобразуем VehicleInfo в словарь для сериализации
+            result_copy = result.copy()
+            if result_copy.get("vehicle_info") and hasattr(result_copy["vehicle_info"], 'to_dict'):
+                result_copy["vehicle_info"] = result_copy["vehicle_info"].to_dict()
+            bt.write_json(result_copy, filename)
             return f"{filename}.json"
         
         else:
@@ -1215,7 +1348,6 @@ def parse_multiple_vins(vin_list: List[str], api_key: str = None, output_format:
 # ==================== ГЛАВНАЯ ФУНКЦИЯ ====================
 
 def main():
-
     """Parse VIN codes from a JSON file provided via command line."""
 
     arg_parser = argparse.ArgumentParser(description="VIN parser")
@@ -1239,11 +1371,9 @@ def main():
         if result.get("error"):
             print(f"  ❌ Ошибка: {result['error']}")
 
-
     print("\n✅ Готово!")
 
 # ==================== ЗАПУСК ====================
 
 if __name__ == "__main__":
     main()
-                
